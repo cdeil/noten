@@ -22,21 +22,40 @@ const PC_TO_NATURAL: Record<number, string> = {
 };
 
 async function clickNatural(page: Page, pc: number) {
-  // Map any pitch class to nearest natural for natural-only practice mode.
   const natural = PC_TO_NATURAL[pc] ?? PC_TO_NATURAL[(pc + 11) % 12];
   await page.getByTestId(`note-btn-${natural}`).click();
 }
 
-test.describe('Notenlesen App v3', () => {
-  test('Settings: alle neuen Optionen sichtbar', async ({ page }) => {
+test.describe('Notenlesen App v3.1', () => {
+  test('Settings: keine Orient-Sektion mehr; Anzeige & Lied vorhanden', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('settings')).toBeVisible();
     await expect(page.getByTestId('display-single')).toBeVisible();
     await expect(page.getByTestId('display-sheet')).toBeVisible();
-    await expect(page.getByTestId('orient-on')).toBeVisible();
     await expect(page.getByTestId('game-song')).toBeVisible();
-    // Kein Lied-Picker mehr
-    await expect(page.locator('[data-testid="song-grid"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="orient-on"]')).toHaveCount(0);
+  });
+
+  test('Orientierung-Toggle ist im Game-Header sichtbar und schaltet Refs ein/aus', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('start-btn').click();
+    const toggle = page.getByTestId('orient-toggle');
+    await expect(toggle).toBeVisible();
+    // default an → mehrere Notenköpfe (refs + Praxisnote)
+    const svg = page.locator('.staff svg').first();
+    const headsOn = await svg.locator('path').count();
+    await toggle.click(); // aus
+    const headsOff = await svg.locator('path').count();
+    expect(headsOn).toBeGreaterThan(headsOff);
+  });
+
+  test('Orientierungs-Refs werden auf demselben Notensystem gerendert (kein Sidebar)', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('start-btn').click();
+    // Es gibt nur EIN note-staff Element (im staff-area), kein zweites
+    await expect(page.getByTestId('note-staff')).toHaveCount(1);
+    // Orient-Sidebar darf nicht existieren
+    await expect(page.locator('[data-testid="orient-panel"]')).toHaveCount(0);
   });
 
   test('Lied-Modus: Titel ist während des Spiels versteckt', async ({ page }) => {
@@ -44,38 +63,11 @@ test.describe('Notenlesen App v3', () => {
     await page.getByTestId('game-song').click();
     await expect(page.getByTestId('song-info')).toBeVisible();
     await page.getByTestId('start-btn').click();
-    await expect(page.getByTestId('game')).toBeVisible();
-    // Titel zeigt nur "Erkenne das Lied!", nicht den Songnamen
     await expect(page.getByText('Erkenne das Lied!')).toBeVisible();
-  });
-
-  test('Orientierungspanel erscheint links neben dem Notensystem', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTestId('orient-on').click();
-    await page.getByTestId('start-btn').click();
-    const panel = page.getByTestId('orient-panel');
-    await expect(panel).toBeVisible();
-    const panelBox = await panel.boundingBox();
-    const staffBox = await page.locator('.staff-area [data-testid="note-staff"]').boundingBox();
-    expect(panelBox && staffBox).toBeTruthy();
-    expect(panelBox!.x).toBeLessThan(staffBox!.x);
-  });
-
-  test('Orientierungslabel verwendet Apostroph-Notation (c\', c\'\')', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTestId('mode-treble').click();
-    await page.getByTestId('orient-on').click();
-    await page.getByTestId('start-btn').click();
-    const labels = await page.locator('.orient-label').allTextContents();
-    // Treble references: c'', g', c'  → mindestens ein Label mit '
-    expect(labels.some((l) => l.includes("'"))).toBe(true);
-    // Es darf KEIN "zweigestrichenes" o.ä. mehr verwendet werden
-    expect(labels.some((l) => /gestrichen/.test(l))).toBe(false);
   });
 
   test('Hint steht über dem Notensystem', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('total-10').click();
     await page.getByTestId('start-btn').click();
     const hintBox = await page.getByTestId('hint').boundingBox();
@@ -97,18 +89,13 @@ test.describe('Notenlesen App v3', () => {
     await page.goto('/');
     await page.getByTestId('display-sheet').click();
     await page.getByTestId('total-10').click();
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('start-btn').click();
     const game = page.getByTestId('game');
     await expect(game).toHaveAttribute('data-display', 'sheet');
-    // SVG sollte mehr als eine Notenkopf-Gruppe enthalten
-    const noteHeads = await page.locator('.staff svg').first().locator('text, path').count();
-    expect(noteHeads).toBeGreaterThan(8);
   });
 
   test('Richtige Antwort erhöht Punkte; falsche bleibt auf gleicher Note', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('total-10').click();
     await page.getByTestId('start-btn').click();
 
@@ -124,7 +111,6 @@ test.describe('Notenlesen App v3', () => {
 
   test('10 richtige Antworten → Ergebnis mit Konfetti', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('total-10').click();
     await page.getByTestId('start-btn').click();
     for (let i = 0; i < 10; i++) {
@@ -139,19 +125,14 @@ test.describe('Notenlesen App v3', () => {
   test('Lied-Modus enthüllt Titel erst am Ende', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('game-song').click();
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('start-btn').click();
     await expect(page.getByTestId('game')).toBeVisible();
-    // Spiele genug richtige Antworten, um irgendein Lied zu beenden.
-    // Setze hartes Limit auf ~120 Klicks.
     for (let i = 0; i < 200; i++) {
       const result = page.getByTestId('result');
       if (await result.isVisible().catch(() => false)) break;
       const staff = page.getByTestId('note-staff');
       if (!(await staff.isVisible().catch(() => false))) break;
       const pc = await readCurrentPitchClass(page);
-      // Songs können Vorzeichen haben → Klavier benutzen
-      // Verwende Buttons grid mit allen Vorzeichen
       const possible = ['C','Cis','D','Dis','E','F','Fis','G','Gis','A','Ais','H'][pc];
       const btn = page.getByTestId(`note-btn-${possible}`);
       if (await btn.count()) await btn.first().click({ force: true });
@@ -166,7 +147,6 @@ test.describe('Notenlesen App v3', () => {
     await page.getByTestId('mode-treble').click();
     await page.getByTestId('diff-hard').click();
     await page.getByTestId('total-30').click();
-    await page.getByTestId('orient-off').click();
     await page.getByTestId('start-btn').click();
     const seenMidis = new Set<number>();
     for (let i = 0; i < 20; i++) {

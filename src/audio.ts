@@ -4,11 +4,7 @@ let synth: Tone.PolySynth | null = null;
 let errorSynth: Tone.Synth | null = null;
 let started = false;
 
-export async function ensureAudio(): Promise<void> {
-  if (!started) {
-    try { await Tone.start(); } catch { /* ignore autoplay policy */ }
-    started = true;
-  }
+function makeSynths() {
   if (!synth) {
     synth = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: 'triangle' },
@@ -25,18 +21,33 @@ export async function ensureAudio(): Promise<void> {
   }
 }
 
+// Synchronous: must be called inside a user-gesture handler (pointerdown/click).
+// Avoids losing the gesture across an `await` boundary which silences audio on Safari.
+export function ensureAudio(): void {
+  if (!started) {
+    void Tone.start();
+    const ctx = Tone.getContext().rawContext as AudioContext;
+    if (ctx && ctx.state !== 'running') void ctx.resume();
+    started = true;
+  }
+  makeSynths();
+}
+
 export function playMidi(midi: number): void {
+  ensureAudio();
   if (!synth) return;
   const freq = Tone.Frequency(midi, 'midi').toFrequency();
   synth.triggerAttackRelease(freq, 0.7);
 }
 
 export function playError(): void {
+  ensureAudio();
   if (!errorSynth) return;
   errorSynth.triggerAttackRelease(110, 0.15);
 }
 
 export function playCheer(): void {
+  ensureAudio();
   if (!synth) return;
   const notes = [72, 76, 79, 84];
   notes.forEach((m, i) => {

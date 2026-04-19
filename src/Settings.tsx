@@ -9,9 +9,11 @@ export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [withAccidentals, setWithAccidentals] = useState(false);
   const [inputMode, setInputMode] = useState<InputMode>('both');
-  const [showOrientation, setShowOrientation] = useState(true);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('single');
   const [total, setTotal] = useState(30);
+
+  // showOrientation default true; the user can toggle it at any time on the game screen.
+  const showOrientation = true;
 
   const start = () => {
     if (gameType === 'song') {
@@ -105,18 +107,6 @@ export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
           </ChoiceButton>
           <ChoiceButton testid="display-sheet" active={displayMode === 'sheet'} onClick={() => setDisplayMode('sheet')}>
             Notenblatt (mehrere Noten)
-          </ChoiceButton>
-        </div>
-      </section>
-
-      <section>
-        <h2>Orientierungstöne</h2>
-        <div className="choice-row">
-          <ChoiceButton testid="orient-off" active={!showOrientation} onClick={() => setShowOrientation(false)}>
-            Aus
-          </ChoiceButton>
-          <ChoiceButton testid="orient-on" active={showOrientation} onClick={() => setShowOrientation(true)}>
-            Links neben dem Notensystem
           </ChoiceButton>
         </div>
       </section>
