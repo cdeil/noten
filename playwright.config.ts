@@ -23,5 +23,14 @@ export default defineConfig({
         hasTouch: true,
       },
     },
+    {
+      name: 'phone',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 }, // iPhone 14
+        hasTouch: true,
+        isMobile: false, // keep desktop chrome to avoid Mobile Safari quirks unrelated to layout
+      },
+    },
   ],
 });
