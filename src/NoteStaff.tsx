@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {
-  Accidental, Annotation, AnnotationVerticalJustify,
+  Accidental,
   Formatter, Renderer, Stave, StaveNote, Voice,
 } from 'vexflow';
 import type { Pitch, Clef } from './notes';
@@ -64,17 +64,15 @@ export function NoteStaff(props: Props) {
     stave.setContext(ctx).draw();
 
     const refs = props.references ?? [];
-    const refNotes = refs.map((r) => {
-      const p = midiToNaturalPitch(r.midi, props.clef);
-      const n = new StaveNote({ clef: props.clef, keys: [p.vexKey], duration: 'q' });
-      n.setStyle({ fillStyle: REF_FILL, strokeStyle: REF_FILL });
-      const ann = new Annotation(germanShortName(r.midi))
-        .setVerticalJustification(AnnotationVerticalJustify.BOTTOM);
-      // @ts-ignore — older VexFlow typings
-      ann.setFont('serif', 14, 'italic');
-      n.addModifier(ann);
-      return n;
-    });
+    // Sort refs from low (high midi → bottom of staff is low pitch) ascending — VexFlow chord requires keys low→high.
+    const refsSorted = [...refs].sort((a, b) => a.midi - b.midi);
+    const refKeys = refsSorted.map((r) => midiToNaturalPitch(r.midi, props.clef).vexKey);
+    const refChord = refsSorted.length > 0
+      ? new StaveNote({ clef: props.clef, keys: refKeys, duration: 'q' })
+      : null;
+    if (refChord) {
+      refChord.setStyle({ fillStyle: REF_FILL, strokeStyle: REF_FILL });
+    }
 
     const practicePitches: Pitch[] = props.mode === 'sheet' ? props.pitches : [props.pitch];
     const currentIdx = props.mode === 'sheet' ? props.currentIndex : 0;
@@ -96,35 +94,49 @@ export function NoteStaff(props: Props) {
       return n;
     });
 
-    const allNotes = [...refNotes, ...practiceNotes];
+    const allNotes = [...(refChord ? [refChord] : []), ...practiceNotes];
     const beats = allNotes.length || 1;
     const voice = new Voice({ num_beats: beats, beat_value: 4 }).setStrict(false);
     voice.addTickables(allNotes);
     new Formatter().joinVoices([voice]).format([voice], width - 80);
     voice.draw(ctx, stave);
 
-    // Make orientation reference notes clickable for "Anhören".
-    if (props.onRefClick && refNotes.length > 0) {
+    // Render German labels next to each ref note in the chord, plus invisible click overlays.
+    if (refChord && refsSorted.length > 0) {
       const svg = host.querySelector('svg');
       if (svg) {
-        // Each note has a generated group; we'll attach pointer handlers via bounding boxes overlay.
-        refs.forEach((r, i) => {
-          const note = refNotes[i];
-          // @ts-ignore VexFlow note exposes getAbsoluteX
-          const x = note.getAbsoluteX();
-          const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          overlay.setAttribute('x', String(x - 14));
-          overlay.setAttribute('y', '10');
-          overlay.setAttribute('width', '34');
-          overlay.setAttribute('height', String(height - 20));
-          overlay.setAttribute('fill', 'transparent');
-          overlay.style.cursor = 'pointer';
-          overlay.setAttribute('data-testid', `ref-overlay-${r.midi}`);
-          overlay.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            props.onRefClick!(r.midi);
-          });
-          svg.appendChild(overlay);
+        // @ts-ignore VexFlow note exposes getAbsoluteX
+        const x = refChord.getAbsoluteX();
+        // @ts-ignore — getYs returns one Y per key in the chord
+        const ys: number[] = refChord.getYs();
+        refsSorted.forEach((r, i) => {
+          const y = ys[i];
+          const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          label.setAttribute('x', String(x + 18));
+          label.setAttribute('y', String(y + 5));
+          label.setAttribute('fill', REF_FILL);
+          label.setAttribute('font-family', 'serif');
+          label.setAttribute('font-size', '15');
+          label.setAttribute('font-style', 'italic');
+          label.setAttribute('data-testid', `ref-label-${r.midi}`);
+          label.textContent = germanShortName(r.midi);
+          svg.appendChild(label);
+
+          if (props.onRefClick) {
+            const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            overlay.setAttribute('x', String(x - 10));
+            overlay.setAttribute('y', String(y - 10));
+            overlay.setAttribute('width', '50');
+            overlay.setAttribute('height', '20');
+            overlay.setAttribute('fill', 'transparent');
+            overlay.style.cursor = 'pointer';
+            overlay.setAttribute('data-testid', `ref-overlay-${r.midi}`);
+            overlay.addEventListener('pointerdown', (e) => {
+              e.preventDefault();
+              props.onRefClick!(r.midi);
+            });
+            svg.appendChild(overlay);
+          }
         });
       }
     }

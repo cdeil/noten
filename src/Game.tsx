@@ -26,10 +26,11 @@ const SHEET_WINDOW = 6;
 const SHEET_LOOK_BACK = 2;
 const PRACTICE_BUFFER = 16;
 
-// Reference tones shown at the start of the staff when orientation is on.
+// Reference tones shown stacked at the start of the staff when orientation is on.
+// Treble: c', e', g', c'', e''   Bass: F, c, f, c'
 const REFERENCES: Record<Clef, OrientationRef[]> = {
-  treble: [{ midi: 60 }, { midi: 67 }],            // c', g'
-  bass:   [{ midi: 53 }, { midi: 60 }],            // f, c'
+  treble: [{ midi: 60 }, { midi: 64 }, { midi: 67 }, { midi: 72 }, { midi: 76 }],
+  bass:   [{ midi: 41 }, { midi: 48 }, { midi: 53 }, { midi: 60 }],
 };
 
 function generatePractice(settings: GameSettings, prevMidi?: number, count = 1): Pitch[] {
@@ -212,7 +213,7 @@ export function Game({ settings, onExit }: { settings: GameSettings; onExit: () 
             feedback={feedback}
             references={refs}
             onRefClick={playRef}
-            width={refs ? 520 : 380}
+            width={refs ? 480 : 380}
             height={220}
           />
         )}
