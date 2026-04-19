@@ -4,15 +4,16 @@ interface Props {
   score: number;
   attempts: number;
   errors: number;
+  title?: string;
   onAgain: () => void;
   onExit: () => void;
 }
 
-export function Result({ score, attempts, errors, onAgain, onExit }: Props) {
+export function Result({ score, attempts, errors, title, onAgain, onExit }: Props) {
   const accuracy = attempts > 0 ? Math.round(((attempts - errors) / attempts) * 100) : 0;
   const stars = accuracy >= 95 ? 3 : accuracy >= 80 ? 2 : 1;
   const message =
-    stars === 3 ? 'Fantastisch! 🌟' : stars === 2 ? 'Super gemacht! 🎉' : 'Gut gemacht! 👍';
+    title ?? (stars === 3 ? 'Fantastisch! 🌟' : stars === 2 ? 'Super gemacht! 🎉' : 'Gut gemacht! 👍');
 
   const confetti = useMemo(
     () => Array.from({ length: 60 }, (_, i) => ({

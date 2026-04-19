@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/game.tsx","./src/notestaff.tsx","./src/piano.tsx","./src/result.tsx","./src/settings.tsx","./src/audio.ts","./src/main.tsx","./src/notes.ts","./src/vexflow.d.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/game.tsx","./src/inputarea.tsx","./src/notestaff.tsx","./src/orientationintro.tsx","./src/result.tsx","./src/settings.tsx","./src/audio.ts","./src/main.tsx","./src/notes.ts","./src/songs.ts","./src/vexflow.d.ts"],"version":"5.9.3"}

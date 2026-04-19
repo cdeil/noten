@@ -1,38 +1,83 @@
 import { useEffect, useRef, useState } from 'react';
 import { NoteStaff } from './NoteStaff';
-import { Piano } from './Piano';
-import { isCorrect, randomPitch, type Mode, type Pitch } from './notes';
-import { ensureAudio, playCheer, playError, playMidi } from './audio';
+import { InputArea, type InputMode } from './InputArea';
+import { OrientationIntro } from './OrientationIntro';
 import { Result } from './Result';
+import {
+  isCorrect, midiToNaturalPitch, randomPitch,
+  type Clef, type Difficulty, type Pitch,
+} from './notes';
+import { ensureAudio, playCheer, playError, playMidi } from './audio';
+import { SONGS } from './songs';
 
 export interface GameSettings {
-  mode: Mode;
+  gameType: 'practice' | 'song';
+  clef: Clef;            // for practice (and copied from song for song mode)
+  difficulty: Difficulty;
   withAccidentals: boolean;
-  total: number;
+  inputMode: InputMode;
+  showOrientation: boolean;
+  total: number;         // 0 = endlos (practice only)
+  songId?: string;
+}
+
+function pickFirst(settings: GameSettings): { pitch: Pitch; songIndex: number } {
+  if (settings.gameType === 'song') {
+    const song = SONGS.find((s) => s.id === settings.songId)!;
+    return { pitch: midiToNaturalPitch(song.notes[0], song.clef), songIndex: 0 };
+  }
+  return {
+    pitch: randomPitch({
+      clef: settings.clef,
+      difficulty: settings.difficulty,
+      withAccidentals: settings.withAccidentals,
+    }),
+    songIndex: 0,
+  };
 }
 
 export function Game({ settings, onExit }: { settings: GameSettings; onExit: () => void }) {
-  const [pitch, setPitch] = useState<Pitch>(() => randomPitch(settings.mode, settings.withAccidentals));
+  const [showIntro, setShowIntro] = useState(settings.showOrientation && settings.gameType === 'practice');
+  const initial = useRef(pickFirst(settings));
+  const [pitch, setPitch] = useState<Pitch>(initial.current.pitch);
+  const [songIndex, setSongIndex] = useState(initial.current.songIndex);
   const [score, setScore] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [errors, setErrors] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [done, setDone] = useState(false);
   const lockRef = useRef(false);
-  const prevMidiRef = useRef<number | undefined>(pitch.midi);
+  const prevMidiRef = useRef<number | undefined>(initial.current.pitch.midi);
 
   useEffect(() => { void ensureAudio(); }, []);
 
+  const song = settings.gameType === 'song' ? SONGS.find((s) => s.id === settings.songId)! : null;
+  const total = song ? song.notes.length : settings.total;
+
   const advance = () => {
-    const next = randomPitch(settings.mode, settings.withAccidentals, prevMidiRef.current);
-    prevMidiRef.current = next.midi;
-    setPitch(next);
+    if (song) {
+      const next = songIndex + 1;
+      if (next >= song.notes.length) { setDone(true); playCheer(); return; }
+      const np = midiToNaturalPitch(song.notes[next], song.clef);
+      prevMidiRef.current = np.midi;
+      setSongIndex(next);
+      setPitch(np);
+    } else {
+      const np = randomPitch({
+        clef: settings.clef,
+        difficulty: settings.difficulty,
+        withAccidentals: settings.withAccidentals,
+        prevMidi: prevMidiRef.current,
+      });
+      prevMidiRef.current = np.midi;
+      setPitch(np);
+    }
     setFeedback(null);
     lockRef.current = false;
   };
 
   const handlePick = async (pitchClass: number) => {
-    if (lockRef.current || done) return;
+    if (lockRef.current || done || showIntro) return;
     await ensureAudio();
     setAttempts((a) => a + 1);
     if (isCorrect(pitch, pitchClass)) {
@@ -41,7 +86,7 @@ export function Game({ settings, onExit }: { settings: GameSettings; onExit: () 
       setFeedback('correct');
       const newScore = score + 1;
       setScore(newScore);
-      if (settings.total > 0 && newScore >= settings.total) {
+      if (!song && total > 0 && newScore >= total) {
         setTimeout(() => { setDone(true); playCheer(); }, 600);
         return;
       }
@@ -54,28 +99,46 @@ export function Game({ settings, onExit }: { settings: GameSettings; onExit: () 
     }
   };
 
+  if (showIntro) {
+    return (
+      <OrientationIntro
+        clef={settings.clef}
+        onContinue={() => setShowIntro(false)}
+      />
+    );
+  }
+
   if (done) {
     return (
       <Result
         score={score}
         attempts={attempts}
         errors={errors}
+        title={song ? `${song.title} – geschafft!` : undefined}
         onAgain={() => {
+          const restart = pickFirst(settings);
           setScore(0); setAttempts(0); setErrors(0); setDone(false);
-          advance();
+          setSongIndex(restart.songIndex);
+          setPitch(restart.pitch);
+          prevMidiRef.current = restart.pitch.midi;
+          setFeedback(null);
+          lockRef.current = false;
         }}
         onExit={onExit}
       />
     );
   }
 
-  const total = settings.total;
   const progressPct = total > 0 ? Math.min(100, (score / total) * 100) : 0;
 
   return (
     <div className="game" data-testid="game">
       <header className="game-header">
         <button className="link-btn" onClick={onExit} data-testid="exit-btn">← Zurück</button>
+        <div className="game-title">
+          {song ? `🎵 ${song.title}` : settings.clef === 'treble' ? 'Violinschlüssel' : 'Bassschlüssel'}
+          {settings.difficulty === 'hard' && !song && <span className="badge">Schwer</span>}
+        </div>
         <div className="score-row">
           <div data-testid="score">Punkte: <strong>{score}</strong>{total > 0 ? ` / ${total}` : ''}</div>
           <div className="muted" data-testid="errors">Fehler: {errors}</div>
@@ -86,6 +149,9 @@ export function Game({ settings, onExit }: { settings: GameSettings; onExit: () 
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
       )}
+      <div className="hint" data-testid="hint">
+        {feedback === 'wrong' ? 'Versuch es noch einmal!' : 'Welche Note ist das?'}
+      </div>
       <main className="staff-area">
         <NoteStaff
           clef={pitch.clef}
@@ -93,12 +159,10 @@ export function Game({ settings, onExit }: { settings: GameSettings; onExit: () 
           accidental={pitch.accidental}
           feedback={feedback}
         />
-        <div className="hint" data-testid="hint">
-          {feedback === 'wrong' ? 'Versuch es noch einmal!' : 'Welche Note ist das?'}
-        </div>
       </main>
-      <footer className="input-area">
-        <Piano
+      <footer className="input-footer">
+        <InputArea
+          inputMode={settings.inputMode}
           withAccidentals={settings.withAccidentals}
           onPick={handlePick}
         />

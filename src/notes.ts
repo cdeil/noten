@@ -1,5 +1,5 @@
 export type Clef = 'treble' | 'bass';
-export type Mode = 'treble' | 'bass' | 'mixed';
+export type Difficulty = 'normal' | 'hard';
 
 export interface Pitch {
   midi: number;
@@ -16,36 +16,28 @@ const NATURAL_NAMES: Record<number, string> = {
 const NATURAL_VEX: Record<number, string> = {
   0: 'c', 2: 'd', 4: 'e', 5: 'f', 7: 'g', 9: 'a', 11: 'b',
 };
+export const NATURAL_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'H'];
 
-export const ACCEPTED_NAMES: Record<number, string[]> = {
-  0: ['C'],
-  1: ['Cis', 'Des'],
-  2: ['D'],
-  3: ['Dis', 'Es'],
-  4: ['E'],
-  5: ['F'],
-  6: ['Fis', 'Ges'],
-  7: ['G'],
-  8: ['Gis', 'As'],
-  9: ['A'],
-  10: ['Ais', 'B'],
-  11: ['H'],
+// All 21 button names (3 rows × 7 cols) → pitch class
+export const NAME_TO_PC: Record<string, number> = {
+  // sharps
+  Cis: 1, Dis: 3, Eis: 5, Fis: 6, Gis: 8, Ais: 10, His: 0,
+  // naturals
+  C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, H: 11,
+  // flats
+  Ces: 11, Des: 1, Es: 3, Fes: 4, Ges: 6, As: 8, B: 10,
 };
 
-export const BUTTON_LABELS: { label: string; pitchClass: number; isAccidental: boolean }[] = [
-  { label: 'C',   pitchClass: 0,  isAccidental: false },
-  { label: 'Cis', pitchClass: 1,  isAccidental: true },
-  { label: 'D',   pitchClass: 2,  isAccidental: false },
-  { label: 'Es',  pitchClass: 3,  isAccidental: true },
-  { label: 'E',   pitchClass: 4,  isAccidental: false },
-  { label: 'F',   pitchClass: 5,  isAccidental: false },
-  { label: 'Fis', pitchClass: 6,  isAccidental: true },
-  { label: 'G',   pitchClass: 7,  isAccidental: false },
-  { label: 'As',  pitchClass: 8,  isAccidental: true },
-  { label: 'A',   pitchClass: 9,  isAccidental: false },
-  { label: 'B',   pitchClass: 10, isAccidental: true },
-  { label: 'H',   pitchClass: 11, isAccidental: false },
+// Layout for the 3-row buttons grid (sharps / naturals / flats).
+export const BUTTONS_GRID: string[][] = [
+  ['Cis', 'Dis', 'Eis', 'Fis', 'Gis', 'Ais', 'His'],
+  ['C',   'D',   'E',   'F',   'G',   'A',   'H'],
+  ['Ces', 'Des', 'Es',  'Fes', 'Ges', 'As',  'B'],
 ];
+
+export function pitchClassFromName(name: string): number | undefined {
+  return NAME_TO_PC[name];
+}
 
 function midiToPitch(midi: number, clef: Clef, withAccidentals: boolean, rng: () => number): Pitch {
   const pitchClass = ((midi % 12) + 12) % 12;
@@ -68,7 +60,7 @@ function midiToPitch(midi: number, clef: Clef, withAccidentals: boolean, rng: ()
       midi, clef, pitchClass,
       vexKey: `${NATURAL_VEX[lowerPc]}/${octave}`,
       accidental: '#',
-      german: ACCEPTED_NAMES[pitchClass][0],
+      german: ['', 'Cis', '', 'Dis', '', '', 'Fis', '', 'Gis', '', 'Ais', ''][pitchClass],
     };
   }
   const upperPc = pitchClass + 1;
@@ -76,26 +68,45 @@ function midiToPitch(midi: number, clef: Clef, withAccidentals: boolean, rng: ()
     midi, clef, pitchClass,
     vexKey: `${NATURAL_VEX[upperPc]}/${octave}`,
     accidental: 'b',
-    german: ACCEPTED_NAMES[pitchClass][1],
+    german: ['', 'Des', '', 'Es', '', '', 'Ges', '', 'As', '', 'B', ''][pitchClass],
   };
 }
 
-const TREBLE_RANGE: [number, number] = [60, 81];
-const BASS_RANGE: [number, number] = [40, 60];
+// Public helper: convert raw midi to a Pitch in C major / no accidentals (used for songs).
+export function midiToNaturalPitch(midi: number, clef: Clef): Pitch {
+  return midiToPitch(midi, clef, false, Math.random);
+}
 
-export function randomPitch(mode: Mode, withAccidentals: boolean, prevMidi?: number): Pitch {
+const RANGES: Record<Clef, Record<Difficulty, [number, number]>> = {
+  treble: {
+    normal: [60, 81],   // C4..A5
+    hard:   [55, 86],   // G3..D6 (Hilfslinien oben/unten)
+  },
+  bass: {
+    normal: [40, 60],   // E2..C4
+    hard:   [33, 65],   // A1..F4
+  },
+};
+
+export interface RandomOpts {
+  clef: Clef;
+  difficulty: Difficulty;
+  withAccidentals: boolean;
+  prevMidi?: number;
+}
+
+export function randomPitch({ clef, difficulty, withAccidentals, prevMidi }: RandomOpts): Pitch {
   const rng = Math.random;
-  let clef: Clef;
-  if (mode === 'mixed') clef = rng() < 0.5 ? 'treble' : 'bass';
-  else clef = mode;
-  const [lo, hi] = clef === 'treble' ? TREBLE_RANGE : BASS_RANGE;
+  const [lo, hi] = RANGES[clef][difficulty];
+  const wantBigJump = difficulty === 'hard' && prevMidi !== undefined && rng() < 0.6;
 
-  for (let tries = 0; tries < 30; tries++) {
+  for (let tries = 0; tries < 40; tries++) {
     const midi = lo + Math.floor(rng() * (hi - lo + 1));
     const pc = ((midi % 12) + 12) % 12;
     const isAccidental = !(pc in NATURAL_NAMES);
     if (!withAccidentals && isAccidental) continue;
     if (midi === prevMidi) continue;
+    if (wantBigJump && Math.abs(midi - (prevMidi as number)) < 7) continue;
     return midiToPitch(midi, clef, withAccidentals, rng);
   }
   return midiToPitch(lo, clef, withAccidentals, rng);
@@ -103,4 +114,23 @@ export function randomPitch(mode: Mode, withAccidentals: boolean, prevMidi?: num
 
 export function isCorrect(pitch: Pitch, pitchClass: number): boolean {
   return pitch.pitchClass === pitchClass;
+}
+
+// German octave name with article-less label.
+// Examples: "eingestrichenes c", "kleines f", "großes C", "Kontra-C".
+export function germanOctaveName(midi: number): string {
+  const pc = ((midi % 12) + 12) % 12;
+  const letter = NATURAL_NAMES[pc] ?? '?';
+  const octave = Math.floor(midi / 12) - 1;
+  const lower = letter.toLowerCase();
+  const upper = letter;
+  switch (octave) {
+    case 6: return `dreigestrichenes ${lower}`;
+    case 5: return `zweigestrichenes ${lower}`;
+    case 4: return `eingestrichenes ${lower}`;
+    case 3: return `kleines ${lower}`;
+    case 2: return `großes ${upper}`;
+    case 1: return `Kontra-${upper}`;
+    default: return upper;
+  }
 }
