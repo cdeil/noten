@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import type { GameSettings } from './Game';
+import type { GameSettings, DisplayMode } from './Game';
 import type { Clef, Difficulty } from './notes';
 import type { InputMode } from './InputArea';
-import { SONGS } from './songs';
 
 export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
   const [gameType, setGameType] = useState<'practice' | 'song'>('practice');
@@ -10,19 +9,18 @@ export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [withAccidentals, setWithAccidentals] = useState(false);
   const [inputMode, setInputMode] = useState<InputMode>('both');
-  const [showOrientation, setShowOrientation] = useState(false);
+  const [showOrientation, setShowOrientation] = useState(true);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('single');
   const [total, setTotal] = useState(30);
-  const [songId, setSongId] = useState<string>(SONGS[0].id);
 
   const start = () => {
     if (gameType === 'song') {
-      const song = SONGS.find((s) => s.id === songId)!;
       onStart({
-        gameType, clef: song.clef, difficulty, withAccidentals: false,
-        inputMode, showOrientation: false, total: song.notes.length, songId,
+        gameType, clef, difficulty, withAccidentals: true,
+        inputMode, showOrientation, displayMode, total: 0,
       });
     } else {
-      onStart({ gameType, clef, difficulty, withAccidentals, inputMode, showOrientation, total });
+      onStart({ gameType, clef, difficulty, withAccidentals, inputMode, showOrientation, displayMode, total });
     }
   };
 
@@ -37,25 +35,31 @@ export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
             🎯 Üben
           </ChoiceButton>
           <ChoiceButton testid="game-song" active={gameType === 'song'} onClick={() => setGameType('song')}>
-            🎵 Lied spielen
+            🎵 Lied erkennen
+          </ChoiceButton>
+        </div>
+        {gameType === 'song' && (
+          <p className="muted small" data-testid="song-info">
+            Ein Lied wird zufällig ausgewählt — der Titel bleibt geheim, bis du fertig bist!
+            Versuche, die Melodie beim Spielen zu erkennen.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <h2>Schlüssel</h2>
+        <div className="choice-row">
+          <ChoiceButton testid="mode-treble" active={clef === 'treble'} onClick={() => setClef('treble')}>
+            Violinschlüssel
+          </ChoiceButton>
+          <ChoiceButton testid="mode-bass" active={clef === 'bass'} onClick={() => setClef('bass')}>
+            Bassschlüssel
           </ChoiceButton>
         </div>
       </section>
 
       {gameType === 'practice' && (
         <>
-          <section>
-            <h2>Schlüssel</h2>
-            <div className="choice-row">
-              <ChoiceButton testid="mode-treble" active={clef === 'treble'} onClick={() => setClef('treble')}>
-                Violinschlüssel
-              </ChoiceButton>
-              <ChoiceButton testid="mode-bass" active={clef === 'bass'} onClick={() => setClef('bass')}>
-                Bassschlüssel
-              </ChoiceButton>
-            </div>
-          </section>
-
           <section>
             <h2>Schwierigkeit</h2>
             <div className="choice-row">
@@ -90,40 +94,32 @@ export function Settings({ onStart }: { onStart: (s: GameSettings) => void }) {
               ))}
             </div>
           </section>
-
-          <section>
-            <h2>Orientierungstöne</h2>
-            <div className="choice-row">
-              <ChoiceButton testid="orient-off" active={!showOrientation} onClick={() => setShowOrientation(false)}>
-                Aus
-              </ChoiceButton>
-              <ChoiceButton testid="orient-on" active={showOrientation} onClick={() => setShowOrientation(true)}>
-                Vor dem Spiel zeigen
-              </ChoiceButton>
-            </div>
-          </section>
         </>
       )}
 
-      {gameType === 'song' && (
-        <section>
-          <h2>Lied auswählen</h2>
-          <div className="song-grid" data-testid="song-grid">
-            {SONGS.map((s) => (
-              <button
-                key={s.id}
-                className={`song-card ${songId === s.id ? 'active' : ''}`}
-                onClick={() => setSongId(s.id)}
-                data-testid={`song-${s.id}`}
-              >
-                <div className="song-emoji">🎵</div>
-                <div className="song-title">{s.title}</div>
-                <div className="song-meta">{s.notes.length} Noten</div>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      <section>
+        <h2>Anzeige</h2>
+        <div className="choice-row">
+          <ChoiceButton testid="display-single" active={displayMode === 'single'} onClick={() => setDisplayMode('single')}>
+            Einzelne Note
+          </ChoiceButton>
+          <ChoiceButton testid="display-sheet" active={displayMode === 'sheet'} onClick={() => setDisplayMode('sheet')}>
+            Notenblatt (mehrere Noten)
+          </ChoiceButton>
+        </div>
+      </section>
+
+      <section>
+        <h2>Orientierungstöne</h2>
+        <div className="choice-row">
+          <ChoiceButton testid="orient-off" active={!showOrientation} onClick={() => setShowOrientation(false)}>
+            Aus
+          </ChoiceButton>
+          <ChoiceButton testid="orient-on" active={showOrientation} onClick={() => setShowOrientation(true)}>
+            Links neben dem Notensystem
+          </ChoiceButton>
+        </div>
+      </section>
 
       <section>
         <h2>Eingabe</h2>

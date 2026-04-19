@@ -47,7 +47,7 @@ export function Result({ score, attempts, errors, title, onAgain, onExit }: Prop
           />
         ))}
       </div>
-      <h1>{message}</h1>
+      <h1 data-testid="result-title">{message}</h1>
       <div className="stars" aria-label={`${stars} Sterne`}>
         {[1, 2, 3].map((s) => (
           <span key={s} className={s <= stars ? 'star on' : 'star'}>★</span>

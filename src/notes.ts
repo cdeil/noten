@@ -77,6 +77,12 @@ export function midiToNaturalPitch(midi: number, clef: Clef): Pitch {
   return midiToPitch(midi, clef, false, Math.random);
 }
 
+// Convert raw midi to a Pitch using sharps for accidentals (used for songs that
+// may contain accidentals — e.g. Für Elise, Star Wars).
+export function midiToSongPitch(midi: number, clef: Clef): Pitch {
+  return midiToPitch(midi, clef, true, () => 0);
+}
+
 const RANGES: Record<Clef, Record<Difficulty, [number, number]>> = {
   treble: {
     normal: [60, 81],   // C4..A5
@@ -133,4 +139,17 @@ export function germanOctaveName(midi: number): string {
     case 1: return `Kontra-${upper}`;
     default: return upper;
   }
+}
+
+// Short German octave notation: C (großes), c (kleines), c' (eingestrichen),
+// c'' (zweigestrichen), c''' (dreigestrichen), ,C (Kontra).
+export function germanShortName(midi: number): string {
+  const pc = ((midi % 12) + 12) % 12;
+  const letter = NATURAL_NAMES[pc] ?? '?';
+  const octave = Math.floor(midi / 12) - 1;
+  if (octave >= 4) return letter.toLowerCase() + "'".repeat(octave - 3);
+  if (octave === 3) return letter.toLowerCase();
+  if (octave === 2) return letter;
+  if (octave === 1) return ',' + letter;
+  return ',,' + letter;
 }
